@@ -5,6 +5,7 @@ import android.graphics.Color
 import android.net.Uri
 import android.os.Bundle
 import android.util.Log
+import android.view.View
 import android.view.ViewGroup
 import android.widget.*
 import androidx.appcompat.app.AppCompatActivity
@@ -13,6 +14,7 @@ import com.github.mikephil.charting.components.XAxis
 import com.github.mikephil.charting.data.Entry
 import com.github.mikephil.charting.data.LineData
 import com.github.mikephil.charting.data.LineDataSet
+import com.github.mikephil.charting.formatter.ValueFormatter
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -95,7 +97,6 @@ class MainActivity : AppCompatActivity() {
         }
         setupChart()
 
-        // Añadir vistas al layout principal
         mainLayout.addView(currencySpinner)
         mainLayout.addView(dateContainer)
         mainLayout.addView(fetchButton)
@@ -103,7 +104,6 @@ class MainActivity : AppCompatActivity() {
 
         setContentView(mainLayout)
 
-        // Configurar listeners
         setupDatePickers()
         setupFetchButton()
     }
@@ -124,7 +124,24 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupCurrencySpinner() {
-        val currencies = arrayOf("USD", "EUR", "GBP", "JPY")
+        val currencies = arrayOf(
+            "AED", "AFN", "ALL", "AMD", "ANG", "AOA", "ARS", "AUD", "AWG", "AZN",
+            "BAM", "BBD", "BDT", "BGN", "BHD", "BIF", "BMD", "BND", "BOB", "BRL", "BSD",
+            "BTN", "BWP", "BYN", "BZD", "CAD", "CDF", "CHF", "CLP", "CNY", "COP", "CRC",
+            "CUP", "CVE", "CZK", "DJF", "DKK", "DOP", "DZD", "EGP", "ERN", "ETB", "EUR",
+            "FJD", "FKP", "FOK", "GBP", "GEL", "GGP", "GHS", "GIP", "GMD", "GNF", "GTQ",
+            "GYD", "HKD", "HNL", "HRK", "HTG", "HUF", "IDR", "ILS", "IMP", "INR", "IQD",
+            "IRR", "ISK", "JEP", "JMD", "JOD", "JPY", "KES", "KGS", "KHR", "KID", "KMF",
+            "KRW", "KWD", "KYD", "KZT", "LAK", "LBP", "LKR", "LRD", "LSL", "LYD", "MAD",
+            "MDL", "MGA", "MKD", "MMK", "MNT", "MOP", "MRU", "MUR", "MVR", "MWK", "MYR",
+            "MZN", "NAD", "NGN", "NIO", "NOK", "NPR", "NZD", "OMR", "PAB", "PEN", "PGK",
+            "PHP", "PKR", "PLN", "PYG", "QAR", "RON", "RSD", "RUB", "RWF", "SAR", "SBD",
+            "SCR", "SDG", "SEK", "SGD", "SHP", "SLE", "SLL", "SOS", "SRD", "SSP", "STN",
+            "SYP", "SZL", "THB", "TJS", "TMT", "TND", "TOP", "TRY", "TTD", "TVD", "TWD",
+            "TZS", "UAH", "UGX", "USD", "UYU", "UZS", "VES", "VND", "VUV", "WST", "XAF",
+            "XCD", "XDR", "XOF", "XPF", "YER", "ZAR", "ZMW", "ZWL"
+        )
+
         val adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, currencies)
         adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
         currencySpinner.adapter = adapter
@@ -167,6 +184,14 @@ class MainActivity : AppCompatActivity() {
         with(chart) {
             description.isEnabled = false
             xAxis.position = XAxis.XAxisPosition.BOTTOM
+            // Configurar el formateador del eje X para mostrar la fecha en formato "dd/MM"
+            xAxis.valueFormatter = object : ValueFormatter() {
+                private val sdf = SimpleDateFormat("dd/MM", Locale.getDefault())
+                override fun getFormattedValue(value: Float): String {
+                    // Se asume que el timestamp está en segundos, se multiplica para obtener milisegundos
+                    return sdf.format(Date((value.toLong() * 1000)))
+                }
+            }
             axisRight.isEnabled = false
             setTouchEnabled(true)
             setPinchZoom(true)
@@ -212,16 +237,22 @@ class MainActivity : AppCompatActivity() {
             val entries = mutableListOf<Entry>()
             cursor?.use {
                 val rateIndex = it.getColumnIndex("rate")
-                var x = 0f
+                val dateIndex = it.getColumnIndex("date")  // Se asume que existe una columna "date" con el timestamp
                 while (it.moveToNext()) {
+                    val timestamp = it.getLong(dateIndex)  // Timestamp en segundos
                     val rate = it.getDouble(rateIndex)
-                    entries.add(Entry(x++, rate.toFloat()))
+                    entries.add(Entry(timestamp.toFloat(), rate.toFloat()))
                 }
             }
 
             if (entries.isNotEmpty()) {
+                // Si hay datos, aseguramos que el gráfico esté visible y lo actualizamos
+                chart.visibility = View.VISIBLE
                 updateChart(entries, currency)
             } else {
+                // Si no se encuentran datos, se oculta el gráfico
+                chart.clear()
+                chart.visibility = View.GONE
                 Toast.makeText(this, "No se encontraron datos", Toast.LENGTH_SHORT).show()
             }
         } catch (e: Exception) {
@@ -234,16 +265,23 @@ class MainActivity : AppCompatActivity() {
         // Limpiar el gráfico para quitar data anterior
         chart.clear()
 
-        // Crear un nuevo dataset con los nuevos datos
+        // Crear un nuevo dataset con los datos obtenidos
         val dataSet = LineDataSet(entries, "Tipo de cambio $currency/MXN").apply {
             color = Color.BLUE
             valueTextColor = Color.BLACK
             lineWidth = 2f
             setCircleColor(Color.RED)
             circleRadius = 4f
+            valueTextSize = 16f  // Aumenta el tamaño del texto de los puntos
+
+            // Formatear los valores para mostrar 3 decimales
+            valueFormatter = object : ValueFormatter() {
+                override fun getFormattedValue(value: Float): String {
+                    return String.format("%.3f", value)
+                }
+            }
         }
         chart.data = LineData(dataSet)
         chart.invalidate()
     }
-
 }
